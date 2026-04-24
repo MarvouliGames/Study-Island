@@ -1,6 +1,5 @@
 export default async function handler(req, res) {
   const target = req.query.url;
-
   if (!target) {
     res.status(400).send("Missing ?url=");
     return;
@@ -9,16 +8,23 @@ export default async function handler(req, res) {
   try {
     const upstream = await fetch(target, {
       headers: {
-        "User-Agent": "Mozilla/5.0"
+        "User-Agent": req.headers["user-agent"] || "Mozilla/5.0"
       }
     });
 
-    const html = await upstream.text();
+    // Copy status
+    res.status(upstream.status);
 
-    res.setHeader("Content-Type", "text/html; charset=utf-8");
-    res.status(200).send(html);
+    // Copy headers
+    upstream.headers.forEach((value, key) => {
+      res.setHeader(key, value);
+    });
+
+    // Stream the body (supports HTML, CSS, JS, images, fonts, everything)
+    upstream.body.pipe(res);
 
   } catch (err) {
-    res.status(500).send("Proxy error: " + err.message + "i fucking hate this");
+    res.status(500).send("Proxy error: " + err.message);
   }
 }
+
