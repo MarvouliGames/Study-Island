@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Study Island Browser</title>
+  <title>Study Island</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -26,7 +26,7 @@
 
     body {
       margin: 0;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      font-family: system-ui, sans-serif;
       background: var(--bg);
       color: var(--fg);
       display: flex;
@@ -96,10 +96,6 @@
       color: var(--fg);
     }
 
-    #mode, #darkToggle {
-      font-size: 11px;
-    }
-
     #contentWrapper {
       flex: 1;
       display: flex;
@@ -155,11 +151,6 @@
       <button id="fwdBtn">→</button>
       <input id="url" placeholder="https://example.com">
       <button id="goBtn">Go</button>
-      <select id="mode">
-        <option value="full">Full (HTML+CSS+JS)</option>
-        <option value="htmlcss">HTML+CSS</option>
-        <option value="html">HTML only</option>
-      </select>
       <button id="darkToggle">Dark</button>
       <button id="newTabBtn">+</button>
     </div>
@@ -176,7 +167,6 @@
   </div>
 
   <script>
-    // --- State ---
     const tabs = [];
     let activeTabId = null;
 
@@ -186,7 +176,6 @@
     const goBtn = document.getElementById("goBtn");
     const backBtn = document.getElementById("backBtn");
     const fwdBtn = document.getElementById("fwdBtn");
-    const modeSelect = document.getElementById("mode");
     const darkToggle = document.getElementById("darkToggle");
     const newTabBtn = document.getElementById("newTabBtn");
     const spinner = document.getElementById("spinner");
@@ -203,6 +192,7 @@
     function proxify(url) {
       return "/api/proxy?url=" + encodeURIComponent(url);
     }
+
     function absolutify(base, relative) {
       try {
         return new URL(relative, base).toString();
@@ -211,7 +201,6 @@
       }
     }
 
-    // --- Tab management ---
     function createTab(initialUrl) {
       const id = "tab-" + Math.random().toString(36).slice(2);
       const pageEl = document.createElement("div");
@@ -270,78 +259,13 @@
       fwdBtn.disabled = tab.historyIndex < 0 || tab.historyIndex >= tab.history.length - 1;
     }
 
-    // --- Rewriters ---
-    function rewriteCSSUrls(text, baseUrl) {
-      return text.replace(/url\((.*?)\)/g, (m, p1) => {
-        const clean = p1.trim().replace(/^['"]|['"]$/g, "");
-        if (!clean || clean.startsWith("data:")) return m;
-        const abs = absolutify(baseUrl, clean);
-        return `url(${proxify(abs)})`;
-      }).replace(/@import\s+['"](.*?)['"]/g, (m, p1) => {
-        const abs = absolutify(baseUrl, p1);
-        return `@import "${proxify(abs)}"`;
-      });
-    }
-
-    function rewriteDocument(doc, tab, mode) {
+    function rewriteLinks(doc, tab) {
       const baseUrl = tab.url;
 
-      // Resources: img, script, link, video, audio, source
-      const resSelectors = ["img", "script", "link", "video", "audio", "source"];
-      resSelectors.forEach(tag => {
-        doc.querySelectorAll(tag).forEach(el => {
-          const attr = el.tagName === "LINK" ? "href" : "src";
-          const val = el.getAttribute(attr);
-          if (!val) return;
-          if (mode === "html") {
-            // strip scripts/styles in HTML-only
-            if (tag === "script" || tag === "link") {
-              el.remove();
-              return;
-            }
-          }
-          const abs = absolutify(baseUrl, val);
-          el.setAttribute(attr, proxify(abs));
-        });
-      });
-
-      // srcset and picture/source
-      doc.querySelectorAll("img[srcset], source[srcset]").forEach(el => {
-        const srcset = el.getAttribute("srcset");
-        if (!srcset) return;
-        const parts = srcset.split(",").map(p => p.trim()).filter(Boolean);
-        const rewritten = parts.map(part => {
-          const [url, size] = part.split(/\s+/, 2);
-          const abs = absolutify(baseUrl, url);
-          return proxify(abs) + (size ? " " + size : "");
-        }).join(", ");
-        el.setAttribute("srcset", rewritten);
-      });
-
-      // Lazy-load attributes
-      ["data-src", "data-original", "data-lazy-src"].forEach(attr => {
-        doc.querySelectorAll("[" + attr + "]").forEach(el => {
-          const val = el.getAttribute(attr);
-          if (!val) return;
-          const abs = absolutify(baseUrl, val);
-          el.setAttribute("src", proxify(abs));
-        });
-      });
-
-      // CSS: <style> blocks
-      doc.querySelectorAll("style").forEach(style => {
-        style.textContent = rewriteCSSUrls(style.textContent, baseUrl);
-      });
-
-      // Inline styles
-      doc.querySelectorAll("[style]").forEach(el => {
-        el.style.cssText = rewriteCSSUrls(el.style.cssText, baseUrl);
-      });
-
-      // Links
       doc.querySelectorAll("a[href]").forEach(a => {
         const href = a.getAttribute("href");
         if (!href || href.startsWith("javascript:")) return;
+
         const abs = absolutify(baseUrl, href);
         a.addEventListener("click", e => {
           e.preventDefault();
@@ -350,44 +274,35 @@
         a.setAttribute("href", "#");
       });
 
-      // Forms
-      doc.querySelectorAll("form").forEach(form => {
-        const action = form.getAttribute("action") || baseUrl;
+      doc.querySelectorAll("form[action]").forEach(form => {
+        const action = form.getAttribute("action");
+        if (!action) return;
         const abs = absolutify(baseUrl, action);
         form.setAttribute("action", proxify(abs));
       });
 
-      // Meta refresh
-      doc.querySelectorAll('meta[http-equiv="refresh"]').forEach(meta => {
-        const content = meta.getAttribute("content") || "";
-        const match = content.match(/url=(.*)$/i);
-        if (match) {
-          const target = absolutify(baseUrl, match[1].trim());
-          setTimeout(() => navigateTo(target, true), 2000);
-        }
+      doc.querySelectorAll("img[src]").forEach(img => {
+        const src = img.getAttribute("src");
+        if (!src) return;
+        const abs = absolutify(baseUrl, src);
+        img.setAttribute("src", proxify(abs));
       });
 
-      // Simple JS URL rewrites (fetch / XHR)
-      if (mode === "full") {
-        doc.querySelectorAll("script").forEach(script => {
-          if (script.src) return; // already proxified above
-          const code = script.textContent;
-          if (!code) return;
-          let rewritten = code.replace(/fetch\(['"](.*?)['"]\)/g, (m, p1) => {
-            const abs = absolutify(baseUrl, p1);
-            return `fetch("${proxify(abs)}")`;
-          });
-          rewritten = rewritten.replace(/new XMLHttpRequest\(\)/g, "new XMLHttpRequest()");
-          // we can't safely rewrite all XHR open() calls, but we leave basic fetch patched
-          script.textContent = rewritten;
-        });
-      } else {
-        // strip inline scripts in non-full modes
-        doc.querySelectorAll("script:not([src])").forEach(s => s.remove());
-      }
+      doc.querySelectorAll("script[src]").forEach(s => {
+        const src = s.getAttribute("src");
+        if (!src) return;
+        const abs = absolutify(baseUrl, src);
+        s.setAttribute("src", proxify(abs));
+      });
+
+      doc.querySelectorAll("link[href]").forEach(l => {
+        const href = l.getAttribute("href");
+        if (!href) return;
+        const abs = absolutify(baseUrl, href);
+        l.setAttribute("href", proxify(abs));
+      });
     }
 
-    // --- Navigation / history ---
     async function navigateTo(url, pushHistory) {
       const tab = getActiveTab();
       if (!tab) return;
@@ -403,7 +318,6 @@
       syncUIWithTab();
 
       try {
-        const mode = modeSelect.value;
         const res = await fetch(proxify(url));
         const ct = res.headers.get("content-type") || "";
 
@@ -436,7 +350,7 @@
         const parser = new DOMParser();
         const doc = parser.parseFromString(html, "text/html");
 
-        rewriteDocument(doc, tab, mode);
+        rewriteLinks(doc, tab);
 
         tab.pageEl.innerHTML = "";
         Array.from(doc.body.childNodes).forEach(n => tab.pageEl.appendChild(n));
@@ -479,7 +393,6 @@
       navigateTo(url, false);
     }
 
-    // --- UI events ---
     goBtn.onclick = () => {
       const val = urlInput.value.trim();
       if (!val) return;
@@ -498,9 +411,8 @@
       darkToggle.textContent = document.body.classList.contains("dark") ? "Light" : "Dark";
     };
 
-    // --- Init ---
     (function init() {
-      document.body.classList.add("dark"); // start dark
+      document.body.classList.add("dark");
       darkToggle.textContent = "Light";
 
       createTab(null);
