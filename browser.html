@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Study Island</title>
+  <title>Study Island Browser</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -260,31 +260,28 @@
     }
 
     function rewriteLinks(doc, tab) {
-  const baseUrl = tab.url;
+      const baseUrl = tab.url;
 
-  // Only handle navigation and forms.
-  // Let images, scripts, and styles load directly from the site.
+      // Only navigation and forms go back through the proxy.
+      doc.querySelectorAll("a[href]").forEach(a => {
+        const href = a.getAttribute("href");
+        if (!href || href.startsWith("javascript:")) return;
 
-  doc.querySelectorAll("a[href]").forEach(a => {
-    const href = a.getAttribute("href");
-    if (!href || href.startsWith("javascript:")) return;
+        const abs = absolutify(baseUrl, href);
+        a.addEventListener("click", e => {
+          e.preventDefault();
+          navigateTo(abs, true);
+        });
+        a.setAttribute("href", "#");
+      });
 
-    const abs = absolutify(baseUrl, href);
-    a.addEventListener("click", e => {
-      e.preventDefault();
-      navigateTo(abs, true);
-    });
-    a.setAttribute("href", "#");
-  });
-
-  doc.querySelectorAll("form[action]").forEach(form => {
-    const action = form.getAttribute("action");
-    if (!action) return;
-    const abs = absolutify(baseUrl, action);
-    form.setAttribute("action", proxify(abs));
-  });
-}
-
+      doc.querySelectorAll("form[action]").forEach(form => {
+        const action = form.getAttribute("action");
+        if (!action) return;
+        const abs = absolutify(baseUrl, action);
+        form.setAttribute("action", proxify(abs));
+      });
+    }
 
     async function navigateTo(url, pushHistory) {
       const tab = getActiveTab();
