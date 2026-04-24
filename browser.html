@@ -1,8 +1,15 @@
+<body>
+  <div id="topbar">
+    <input id="url" placeholder="https://example.com">
+    <button id="go">Go</button>
+  </div>
+
+  <div id="content">Enter a URL and press Go.</div>
+
 <script>
   const input = document.getElementById("url");
   const content = document.getElementById("content");
 
-  // 🔧 FIX: don't start as null; start as empty string
   let currentUrl = "";
 
   function proxify(url) {
@@ -10,7 +17,6 @@
   }
 
   function absolutify(base, relative) {
-    // 🔧 FIX: if we don't have a base yet, just return the relative as-is
     if (!base) return relative;
     try {
       return new URL(relative, base).toString();
@@ -19,7 +25,6 @@
     }
   }
 
-  // ✅ Only added behavior: make links navigate through loadURL
   function rewriteLinks(doc) {
     doc.querySelectorAll("a[href]").forEach(a => {
       const href = a.getAttribute("href");
@@ -43,7 +48,6 @@
       url = "https://" + url;
     }
 
-    // 🔧 currentUrl is always a string now
     currentUrl = url;
     input.value = url;
     content.innerHTML = "Loading…";
@@ -55,7 +59,6 @@
       const parser = new DOMParser();
       const doc = parser.parseFromString(html, "text/html");
 
-      // ✅ Only extra behavior: rewrite links
       rewriteLinks(doc);
 
       content.innerHTML = "";
@@ -76,3 +79,4 @@
     if (e.key === "Enter") loadURL(input.value);
   });
 </script>
+</body>
