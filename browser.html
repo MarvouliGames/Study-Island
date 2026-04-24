@@ -32,7 +32,6 @@
     #content {
       flex: 1;
       overflow: auto;
-      padding: 10px;
       background: white;
     }
   </style>
@@ -47,79 +46,86 @@
 
   <div id="content">Enter a URL and press Go.</div>
 
-  <script>
-    const input = document.getElementById("url");
-    const content = document.getElementById("content");
+<script>
+  const input = document.getElementById("url");
+  const content = document.getElementById("content");
 
-    let currentUrl = "";
+  let currentUrl = "";
 
-    function proxify(url) {
-      return "/api/proxy?url=" + encodeURIComponent(url);
+  function proxify(url) {
+    return "/api/proxy?url=" + encodeURIComponent(url);
+  }
+
+  function absolutify(base, relative) {
+    if (!base) return relative;
+    try {
+      return new URL(relative, base).toString();
+    } catch {
+      return relative;
     }
+  }
 
-    function absolutify(base, relative) {
-      if (!base) return relative;
-      try {
-        return new URL(relative, base).toString();
-      } catch {
-        return relative;
-      }
-    }
+  // ⭐ Link rewriting ONLY — no other rewriting
+  function rewriteLinks(doc) {
+    doc.querySelectorAll("a[href]").forEach(a => {
+      const href = a.getAttribute("href");
+      if (!href || href.startsWith("javascript:")) return;
 
-    function rewriteLinks(doc) {
-      doc.querySelectorAll("a[href]").forEach(a => {
-        const href = a.getAttribute("href");
-        if (!href || href.startsWith("javascript:")) return;
+      const abs = absolutify(currentUrl, href);
 
-        const abs = absolutify(currentUrl, href);
-
-        a.addEventListener("click", ev => {
-          ev.preventDefault();
-          loadURL(abs);
-        });
-
-        a.setAttribute("href", "#");
+      a.addEventListener("click", ev => {
+        ev.preventDefault();
+        loadURL(abs);
       });
-    }
 
-    async function loadURL(url) {
-      if (!url) return;
-
-      if (!url.startsWith("http://") && !url.startsWith("https://")) {
-        url = "https://" + url;
-      }
-
-      currentUrl = url;
-      input.value = url;
-      content.innerHTML = "Loading…";
-
-      try {
-        const res = await fetch(proxify(url));
-        const html = await res.text();
-
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, "text/html");
-
-        rewriteLinks(doc);
-
-        content.innerHTML = "";
-        Array.from(doc.body.childNodes).forEach(node => {
-          content.appendChild(node);
-        });
-
-        document.title = doc.title || "Browser";
-
-      } catch (e) {
-        content.textContent = "Failed to load: " + e.message;
-      }
-    }
-
-    document.getElementById("go").onclick = () => loadURL(input.value);
-
-    input.addEventListener("keydown", e => {
-      if (e.key === "Enter") loadURL(input.value);
+      a.setAttribute("href", "#");
     });
-  </script>
+  }
+
+  async function loadURL(url) {
+    if (!url) return;
+
+    if (!url.startsWith("http://") && !url.startsWith("https://")) {
+      url = "https://" + url;
+    }
+
+    currentUrl = url;
+    input.value = url;
+    content.innerHTML = "Loading…";
+
+    try {
+      const res = await fetch(proxify(url));
+      const html = await res.text();
+
+      // ⭐ Parse full HTML (including <head>)
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, "text/html");
+
+      rewriteLinks(doc);
+
+      // ⭐ Inject the ENTIRE <html> content safely
+      const newDoc = document.implementation.createHTMLDocument("");
+      newDoc.documentElement.innerHTML = doc.documentElement.innerHTML;
+
+      // ⭐ Replace only the content area, not the whole page
+      content.innerHTML = "";
+      Array.from(newDoc.body.childNodes).forEach(node => {
+        content.appendChild(node);
+      });
+
+      document.title = newDoc.title || "Browser";
+
+    } catch (e) {
+      content.textContent = "Failed to load: " + e.message;
+    }
+  }
+
+  document.getElementById("go").onclick = () => loadURL(input.value);
+
+  input.addEventListener("keydown", e => {
+    if (e.key === "Enter") loadURL(input.value);
+  });
+</script>
 
 </body>
 </html>
