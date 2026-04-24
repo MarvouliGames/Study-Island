@@ -9,26 +9,16 @@ export default async function handler(req, res) {
   try {
     const upstream = await fetch(target, {
       headers: {
-        "User-Agent": "Mozilla/5.0",
-        "Accept": "text/html"
+        "User-Agent": "Mozilla/5.0"
       }
     });
 
-    const contentType = upstream.headers.get("content-type") || "";
-
-    // Only allow HTML through the proxy
-    if (!contentType.includes("text/html")) {
-      res.status(403).send("Blocked: Only HTML pages can be proxied.");
-      return;
-    }
-
     const html = await upstream.text();
 
-    // Return HTML exactly as-is
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.status(200).send(html);
 
   } catch (err) {
-    res.status(500).send("Proxy error: " + err.message);
+    res.status(500).send("Proxy error: " + err.message + "i fucking hate this");
   }
 }

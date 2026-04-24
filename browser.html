@@ -1,4 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Study Island</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    #topbar {
+      display: flex;
+      gap: 8px;
+      padding: 8px;
+      background: #eee;
+      border-bottom: 1px solid #ccc;
+    }
+    #url {
+      flex: 1;
+      padding: 8px;
+      font-size: 14px;
+    }
+    #go {
+      padding: 8px 16px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    #content {
+      flex: 1;
+      overflow: auto;
+      padding: 10px;
+      background: white;
+    }
+  </style>
+</head>
 <body>
+
   <div id="topbar">
     <input id="url" placeholder="https://example.com">
     <button id="go">Go</button>
@@ -6,88 +45,78 @@
 
   <div id="content">Enter a URL and press Go.</div>
 
-<script>
-  const input = document.getElementById("url");
-  const content = document.getElementById("content");
+  <script>
+    const input = document.getElementById("url");
+    const content = document.getElementById("content");
 
-  let currentUrl = null;
+    let currentUrl = null;
 
-  function proxify(url) {
-    return "/api/proxy?url=" + encodeURIComponent(url);
-  }
-
-  function absolutify(base, relative) {
-    try {
-      return new URL(relative, base).toString();
-    } catch {
-      return relative;
+    function proxify(url) {
+      return "/api/proxy?url=" + encodeURIComponent(url);
     }
-  }
 
-  function rewriteLinks(doc) {
-    doc.querySelectorAll("a[href]").forEach(a => {
-      const href = a.getAttribute("href");
-      if (!href || href.startsWith("javascript:")) return;
+    function absolutify(base, relative) {
+      try {
+        return new URL(relative, base).toString();
+      } catch {
+        return relative;
+      }
+    }
 
-      const abs = absolutify(currentUrl, href);
+    function rewriteLinks(doc) {
+      doc.querySelectorAll("a[href]").forEach(a => {
+        const href = a.getAttribute("href");
+        if (!href || href.startsWith("javascript:")) return;
 
-      a.addEventListener("click", ev => {
-        ev.preventDefault();
-        loadURL(abs);
+        const abs = absolutify(currentUrl, href);
+
+        a.addEventListener("click", ev => {
+          ev.preventDefault();
+          loadURL(abs);
+        });
+
+        a.setAttribute("href", "#");
       });
-
-      a.setAttribute("href", "#");
-    });
-
-    doc.querySelectorAll("form[action]").forEach(form => {
-      const action = form.getAttribute("action");
-      if (!action) return;
-
-      const abs = absolutify(currentUrl, action);
-      form.setAttribute("action", proxify(abs));
-    });
-  }
-
-  async function loadURL(url) {
-    if (!url) return;
-
-    if (!url.startsWith("http://") && !url.startsWith("https://")) {
-      url = "https://" + url;
     }
 
-    currentUrl = url;
-    input.value = url;
-    content.innerHTML = "Loading…";
+    async function loadURL(url) {
+      if (!url) return;
 
-    try {
-      const res = await fetch(proxify(url));
-      const html = await res.text();
+      if (!url.startsWith("http://") && !url.startsWith("https://")) {
+        url = "https://" + url;
+      }
 
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(html, "text/html");
+      currentUrl = url;
+      input.value = url;
+      content.innerHTML = "Loading…";
 
-      rewriteLinks(doc);
+      try {
+        const res = await fetch(proxify(url));
+        const html = await res.text();
 
-      content.innerHTML = "";
-      Array.from(doc.body.childNodes).forEach(node => {
-        content.appendChild(node);
-      });
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, "text/html");
 
-      document.title = doc.title || "Browser";
+        rewriteLinks(doc);
 
-    } catch (e) {
-      content.textContent = "Failed to load: " + e.message;
+        content.innerHTML = "";
+        Array.from(doc.body.childNodes).forEach(node => {
+          content.appendChild(node);
+        });
+
+        document.title = doc.title || "Browser";
+
+      } catch (e) {
+        content.textContent = "Failed to load: " + e.message;
+      }
     }
-  }
 
-  document.getElementById("go").onclick = () => loadURL(input.value);
+    document.getElementById("go").onclick = () => loadURL(input.value);
 
-  input.addEventListener("keydown", e => {
-    if (e.key === "Enter") loadURL(input.value);
-  });
+    input.addEventListener("keydown", e => {
+      if (e.key === "Enter") loadURL(input.value);
+    });
+  </script>
 
-  const params = new URLSearchParams(location.search);
-  const startUrl = params.get("url");
-  if (startUrl) loadURL(startUrl);
-</script>
 </body>
+</html>
