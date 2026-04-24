@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Mini Browser</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: sans-serif;
+      background: #f0f0f0;
+    }
+    #topbar {
+      display: flex;
+      padding: 10px;
+      background: #ffffff;
+      border-bottom: 1px solid #ccc;
+    }
+    #url {
+      flex: 1;
+      padding: 8px;
+      font-size: 16px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    #go {
+      margin-left: 10px;
+      padding: 8px 16px;
+      font-size: 16px;
+      border: none;
+      background: #0070f3;
+      color: white;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    #go:hover {
+      background: #0059c9;
+    }
+    iframe {
+      width: 100%;
+      height: calc(100vh - 60px);
+      border: none;
+      background: white;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="topbar">
+    <input id="url" placeholder="Enter a URL…" />
+    <button id="go">Go</button>
+  </div>
+
+  <iframe id="viewer"></iframe>
+
+  <script>
+    const input = document.getElementById("url");
+    const viewer = document.getElementById("viewer");
+    const goBtn = document.getElementById("go");
+
+    function loadURL() {
+      const target = input.value.trim();
+      if (!target) return;
+
+      const proxied =
+        "/api/proxy?url=" + encodeURIComponent(target);
+
+      viewer.src = proxied;
+    }
+
+    goBtn.onclick = loadURL;
+
+    input.addEventListener("keydown", e => {
+      if (e.key === "Enter") loadURL();
+    });
+  </script>
+
+</body>
+</html>
