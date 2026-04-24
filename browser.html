@@ -260,48 +260,31 @@
     }
 
     function rewriteLinks(doc, tab) {
-      const baseUrl = tab.url;
+  const baseUrl = tab.url;
 
-      doc.querySelectorAll("a[href]").forEach(a => {
-        const href = a.getAttribute("href");
-        if (!href || href.startsWith("javascript:")) return;
+  // Only handle navigation and forms.
+  // Let images, scripts, and styles load directly from the site.
 
-        const abs = absolutify(baseUrl, href);
-        a.addEventListener("click", e => {
-          e.preventDefault();
-          navigateTo(abs, true);
-        });
-        a.setAttribute("href", "#");
-      });
+  doc.querySelectorAll("a[href]").forEach(a => {
+    const href = a.getAttribute("href");
+    if (!href || href.startsWith("javascript:")) return;
 
-      doc.querySelectorAll("form[action]").forEach(form => {
-        const action = form.getAttribute("action");
-        if (!action) return;
-        const abs = absolutify(baseUrl, action);
-        form.setAttribute("action", proxify(abs));
-      });
+    const abs = absolutify(baseUrl, href);
+    a.addEventListener("click", e => {
+      e.preventDefault();
+      navigateTo(abs, true);
+    });
+    a.setAttribute("href", "#");
+  });
 
-      doc.querySelectorAll("img[src]").forEach(img => {
-        const src = img.getAttribute("src");
-        if (!src) return;
-        const abs = absolutify(baseUrl, src);
-        img.setAttribute("src", proxify(abs));
-      });
+  doc.querySelectorAll("form[action]").forEach(form => {
+    const action = form.getAttribute("action");
+    if (!action) return;
+    const abs = absolutify(baseUrl, action);
+    form.setAttribute("action", proxify(abs));
+  });
+}
 
-      doc.querySelectorAll("script[src]").forEach(s => {
-        const src = s.getAttribute("src");
-        if (!src) return;
-        const abs = absolutify(baseUrl, src);
-        s.setAttribute("src", proxify(abs));
-      });
-
-      doc.querySelectorAll("link[href]").forEach(l => {
-        const href = l.getAttribute("href");
-        if (!href) return;
-        const abs = absolutify(baseUrl, href);
-        l.setAttribute("href", proxify(abs));
-      });
-    }
 
     async function navigateTo(url, pushHistory) {
       const tab = getActiveTab();
