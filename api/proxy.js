@@ -28,6 +28,6 @@ export default async function handler(req, res) {
 
     res.status(upstream.status).send(buffer);
   } catch (err) {
-    res.status(500).send("Proxy error: " + err.message);
+    res.status(500).send("Proxy error: " + err.message + "Try ");
   }
 }
