@@ -20,8 +20,11 @@ export default async function handler(req, res) {
       res.setHeader(key, value);
     });
 
-    // Stream the body (supports HTML, CSS, JS, images, fonts, everything)
-    upstream.body.pipe(res);
+    // Read the entire body as an ArrayBuffer (works for ALL file types)
+    const buffer = Buffer.from(await upstream.arrayBuffer());
+
+    // Send it directly
+    res.send(buffer);
 
   } catch (err) {
     res.status(500).send("Proxy error: " + err.message);
