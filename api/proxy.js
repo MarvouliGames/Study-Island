@@ -1,46 +1,54 @@
-function normalizeURL(url) {
+export default async function handler(req, res) {
   try {
-    return new URL(url).toString();
-  } catch {
-    try {
-      return new URL("https://" + url).toString();
-    } catch {
-      return null;
+    const target = req.query.url;
+
+    if (!target) {
+      res.status(400).send("Missing ?url=");
+      return;
     }
-  }
-}
 
-async function loadURL(url) {
-  if (!url) return;
+    // Validate URL
+    let url;
+    try {
+      url = new URL(target);
+    } catch {
+      res.status(400).send("Invalid URL");
+      return;
+    }
 
-  let normalized = normalizeURL(url);
-  if (!normalized) {
-    content.textContent = "Invalid URL";
-    return;
-  }
-
-  url = normalized;
-  currentUrl = url;
-  input.value = url;
-  content.innerHTML = "Loading…";
-
-  try {
-    const res = await fetch(proxify(url));
-    const html = await res.text();
-
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(html, "text/html");
-
-    rewriteLinks(doc);
-
-    content.innerHTML = "";
-    Array.from(doc.body.childNodes).forEach(node => {
-      content.appendChild(node);
+    // Fetch upstream
+    const upstream = await fetch(url.toString(), {
+      headers: {
+        "User-Agent": req.headers["user-agent"] || "Mozilla/5.0",
+        "Accept": "*/*"
+      }
     });
 
-    document.title = doc.title || "Browser";
+    // Copy status
+    res.status(upstream.status);
 
-  } catch (e) {
-    content.textContent = "Failed to load: " + e.message;
+    // Copy SAFE headers only
+    const safeHeaders = [
+      "content-type",
+      "content-length",
+      "cache-control",
+      "expires",
+      "last-modified",
+      "etag"
+    ];
+
+    upstream.headers.forEach((value, key) => {
+      if (safeHeaders.includes(key.toLowerCase())) {
+        res.setHeader(key, value);
+      }
+    });
+
+    // Read body safely
+    const buffer = Buffer.from(await upstream.arrayBuffer());
+
+    res.send(buffer);
+
+  } catch (err) {
+    res.status(500).send("Proxy error: " + err.message);
   }
 }
