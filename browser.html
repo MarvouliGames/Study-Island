@@ -2,76 +2,166 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Mini Browser</title>
+  <title>Study Island Browser</title>
   <style>
+    * { box-sizing: border-box; }
     body {
       margin: 0;
-      font-family: sans-serif;
-      background: #f0f0f0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #f3f3f3;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
     }
     #topbar {
       display: flex;
-      padding: 10px;
+      gap: 8px;
+      padding: 8px;
       background: #ffffff;
-      border-bottom: 1px solid #ccc;
+      border-bottom: 1px solid #ddd;
     }
     #url {
       flex: 1;
       padding: 8px;
-      font-size: 16px;
+      font-size: 14px;
       border: 1px solid #ccc;
       border-radius: 4px;
     }
     #go {
-      margin-left: 10px;
       padding: 8px 16px;
-      font-size: 16px;
+      font-size: 14px;
       border: none;
       background: #0070f3;
       color: white;
       border-radius: 4px;
       cursor: pointer;
     }
-    #go:hover {
-      background: #0059c9;
+    #go:hover { background: #0059c9; }
+    #content {
+      flex: 1;
+      overflow: auto;
+      background: #ffffff;
+      padding: 8px;
     }
-    iframe {
-      width: 100%;
-      height: calc(100vh - 60px);
-      border: none;
-      background: white;
+    #status {
+      font-size: 12px;
+      color: #666;
+      padding: 4px 8px;
+      border-top: 1px solid #ddd;
+      background: #fafafa;
     }
   </style>
 </head>
 <body>
 
   <div id="topbar">
-    <input id="url" placeholder="Enter a URL…" />
+    <input id="url" placeholder="https://example.com" />
     <button id="go">Go</button>
   </div>
 
-  <iframe id="viewer"></iframe>
+  <div id="content">Enter a URL and press Go.</div>
+  <div id="status"></div>
 
   <script>
     const input = document.getElementById("url");
-    const viewer = document.getElementById("viewer");
+    const content = document.getElementById("content");
+    const statusEl = document.getElementById("status");
     const goBtn = document.getElementById("go");
 
-    function loadURL() {
-      const target = input.value.trim();
-      if (!target) return;
+    let currentUrl = null;
 
-      const proxied =
-        "/api/proxy?url=" + encodeURIComponent(target);
-
-      viewer.src = proxied;
+    function setStatus(msg) {
+      statusEl.textContent = msg || "";
     }
 
-    goBtn.onclick = loadURL;
+    async function loadURL(url) {
+      if (!url) return;
+      try {
+        currentUrl = url;
+        input.value = url;
+        setStatus("Loading " + url + " …");
+        content.innerHTML = "Loading…";
 
+        const proxied = "/api/proxy?url=" + encodeURIComponent(url);
+        const res = await fetch(proxied);
+
+        const ct = res.headers.get("content-type") || "";
+        if (!res.ok) {
+          const text = await res.text();
+          content.textContent = "Error " + res.status + ":\n" + text;
+          setStatus("Error " + res.status);
+          return;
+        }
+
+        if (!ct.includes("text/html")) {
+          const text = await res.text();
+          content.textContent = text;
+          setStatus("Loaded as text (" + ct + ")");
+          return;
+        }
+
+        const html = await res.text();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, "text/html");
+
+        rewriteLinks(doc);
+
+        document.title = doc.title || "Study Island Browser";
+
+        content.innerHTML = "";
+        Array.from(doc.body.childNodes).forEach(node => {
+          content.appendChild(node);
+        });
+
+        setStatus("Loaded " + url);
+      } catch (e) {
+        content.textContent = "Failed to load: " + e.message;
+        setStatus("Failed");
+      }
+    }
+
+    function rewriteLinks(doc) {
+      const anchors = doc.querySelectorAll("a[href]");
+      anchors.forEach(a => {
+        const href = a.getAttribute("href");
+        if (!href || href.startsWith("javascript:")) return;
+
+        let absolute;
+        try {
+          absolute = new URL(href, currentUrl).toString();
+        } catch {
+          return;
+        }
+
+        a.addEventListener("click", ev => {
+          ev.preventDefault();
+          loadURL(absolute);
+        });
+
+        a.setAttribute("href", "#");
+      });
+    }
+
+    function onGo() {
+      const raw = input.value.trim();
+      if (!raw) return;
+      const url = raw.startsWith("http://") || raw.startsWith("https://")
+        ? raw
+        : "https://" + raw;
+      loadURL(url);
+    }
+
+    goBtn.addEventListener("click", onGo);
     input.addEventListener("keydown", e => {
-      if (e.key === "Enter") loadURL();
+      if (e.key === "Enter") onGo();
     });
+
+    const params = new URLSearchParams(location.search);
+    const startUrl = params.get("url");
+    if (startUrl) {
+      loadURL(startUrl);
+      input.value = startUrl;
+    }
   </script>
 
 </body>
