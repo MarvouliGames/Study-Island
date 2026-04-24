@@ -1,33 +1,46 @@
-export default async function handler(req, res) {
-  const target = req.query.url;
-  if (!target) {
-    res.status(400).send("Missing ?url=");
-    return;
-  }
-
+function normalizeURL(url) {
   try {
-    const upstream = await fetch(target, {
-      headers: {
-        "User-Agent": req.headers["user-agent"] || "Mozilla/5.0"
-      }
-    });
-
-    // Copy status
-    res.status(upstream.status);
-
-    // Copy headers
-    upstream.headers.forEach((value, key) => {
-      res.setHeader(key, value);
-    });
-
-    // Read the entire body as an ArrayBuffer (works for ALL file types)
-    const buffer = Buffer.from(await upstream.arrayBuffer());
-
-    // Send it directly
-    res.send(buffer);
-
-  } catch (err) {
-    res.status(500).send("Proxy error: " + err.message);
+    return new URL(url).toString();
+  } catch {
+    try {
+      return new URL("https://" + url).toString();
+    } catch {
+      return null;
+    }
   }
 }
 
+async function loadURL(url) {
+  if (!url) return;
+
+  let normalized = normalizeURL(url);
+  if (!normalized) {
+    content.textContent = "Invalid URL";
+    return;
+  }
+
+  url = normalized;
+  currentUrl = url;
+  input.value = url;
+  content.innerHTML = "Loading…";
+
+  try {
+    const res = await fetch(proxify(url));
+    const html = await res.text();
+
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, "text/html");
+
+    rewriteLinks(doc);
+
+    content.innerHTML = "";
+    Array.from(doc.body.childNodes).forEach(node => {
+      content.appendChild(node);
+    });
+
+    document.title = doc.title || "Browser";
+
+  } catch (e) {
+    content.textContent = "Failed to load: " + e.message;
+  }
+}
