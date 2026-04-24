@@ -2,23 +2,22 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Study Island Browser</title>
+  <title>Study Island</title>
   <style>
-    * { box-sizing: border-box; }
     body {
       margin: 0;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-      background: #f3f3f3;
+      font-family: system-ui, sans-serif;
       display: flex;
       flex-direction: column;
       height: 100vh;
+      background: #f0f0f0;
     }
     #topbar {
       display: flex;
       gap: 8px;
       padding: 8px;
-      background: #ffffff;
-      border-bottom: 1px solid #ddd;
+      background: white;
+      border-bottom: 1px solid #ccc;
     }
     #url {
       flex: 1;
@@ -29,139 +28,120 @@
     }
     #go {
       padding: 8px 16px;
-      font-size: 14px;
-      border: none;
       background: #0070f3;
       color: white;
+      border: none;
       border-radius: 4px;
       cursor: pointer;
     }
-    #go:hover { background: #0059c9; }
     #content {
       flex: 1;
       overflow: auto;
-      background: #ffffff;
-      padding: 8px;
-    }
-    #status {
-      font-size: 12px;
-      color: #666;
-      padding: 4px 8px;
-      border-top: 1px solid #ddd;
-      background: #fafafa;
+      background: white;
+      padding: 10px;
     }
   </style>
 </head>
 <body>
 
   <div id="topbar">
-    <input id="url" placeholder="https://example.com" />
+    <input id="url" placeholder="https://example.com">
     <button id="go">Go</button>
   </div>
 
-  <div id="content">Enter a URL and press Go.</div>
-  <div id="status"></div>
+  <div id="content">Enter a URL to begin.</div>
 
   <script>
     const input = document.getElementById("url");
     const content = document.getElementById("content");
-    const statusEl = document.getElementById("status");
-    const goBtn = document.getElementById("go");
 
     let currentUrl = null;
 
-    function setStatus(msg) {
-      statusEl.textContent = msg || "";
+    function proxify(url) {
+      return "/api/proxy?url=" + encodeURIComponent(url);
     }
 
-    async function loadURL(url) {
-      if (!url) return;
+    function absolutify(base, relative) {
       try {
-        currentUrl = url;
-        input.value = url;
-        setStatus("Loading " + url + " …");
-        content.innerHTML = "Loading…";
-
-        const proxied = "/api/proxy?url=" + encodeURIComponent(url);
-        const res = await fetch(proxied);
-
-        const ct = res.headers.get("content-type") || "";
-        if (!res.ok) {
-          const text = await res.text();
-          content.textContent = "Error " + res.status + ":\n" + text;
-          setStatus("Error " + res.status);
-          return;
-        }
-
-        if (!ct.includes("text/html")) {
-          const text = await res.text();
-          content.textContent = text;
-          setStatus("Loaded as text (" + ct + ")");
-          return;
-        }
-
-        const html = await res.text();
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, "text/html");
-
-        rewriteLinks(doc);
-
-        document.title = doc.title || "Study Island Browser";
-
-        content.innerHTML = "";
-        Array.from(doc.body.childNodes).forEach(node => {
-          content.appendChild(node);
-        });
-
-        setStatus("Loaded " + url);
-      } catch (e) {
-        content.textContent = "Failed to load: " + e.message;
-        setStatus("Failed");
+        return new URL(relative, base).toString();
+      } catch {
+        return relative;
       }
     }
 
-    function rewriteLinks(doc) {
-      const anchors = doc.querySelectorAll("a[href]");
-      anchors.forEach(a => {
+    function rewriteDocument(doc) {
+      // Rewrite <img>, <script>, <link>, <video>, <audio>, <source>
+      const selectors = ["img", "script", "link", "video", "audio", "source"];
+      selectors.forEach(tag => {
+        doc.querySelectorAll(tag).forEach(el => {
+          const attr = el.tagName === "LINK" ? "href" : "src";
+          const val = el.getAttribute(attr);
+          if (!val) return;
+
+          const abs = absolutify(currentUrl, val);
+          el.setAttribute(attr, proxify(abs));
+        });
+      });
+
+      // Rewrite CSS url(...)
+      doc.querySelectorAll("style").forEach(style => {
+        style.textContent = style.textContent.replace(/url\((.*?)\)/g, (m, p1) => {
+          const clean = p1.replace(/['"]/g, "");
+          const abs = absolutify(currentUrl, clean);
+          return `url(${proxify(abs)})`;
+        });
+      });
+
+      // Rewrite inline styles
+      doc.querySelectorAll("[style]").forEach(el => {
+        el.style.cssText = el.style.cssText.replace(/url\((.*?)\)/g, (m, p1) => {
+          const clean = p1.replace(/['"]/g, "");
+          const abs = absolutify(currentUrl, clean);
+          return `url(${proxify(abs)})`;
+        });
+      });
+
+      // Rewrite <a> navigation
+      doc.querySelectorAll("a[href]").forEach(a => {
         const href = a.getAttribute("href");
         if (!href || href.startsWith("javascript:")) return;
 
-        let absolute;
-        try {
-          absolute = new URL(href, currentUrl).toString();
-        } catch {
-          return;
-        }
-
-        a.addEventListener("click", ev => {
-          ev.preventDefault();
-          loadURL(absolute);
+        const abs = absolutify(currentUrl, href);
+        a.addEventListener("click", e => {
+          e.preventDefault();
+          loadURL(abs);
         });
-
         a.setAttribute("href", "#");
+      });
+
+      // Rewrite form actions
+      doc.querySelectorAll("form[action]").forEach(form => {
+        const action = form.getAttribute("action");
+        const abs = absolutify(currentUrl, action);
+        form.setAttribute("action", proxify(abs));
       });
     }
 
-    function onGo() {
-      const raw = input.value.trim();
-      if (!raw) return;
-      const url = raw.startsWith("http://") || raw.startsWith("https://")
-        ? raw
-        : "https://" + raw;
-      loadURL(url);
+    async function loadURL(url) {
+      currentUrl = url;
+      input.value = url;
+
+      const res = await fetch(proxify(url));
+      const html = await res.text();
+
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, "text/html");
+
+      rewriteDocument(doc);
+
+      content.innerHTML = "";
+      Array.from(doc.body.childNodes).forEach(n => content.appendChild(n));
     }
 
-    goBtn.addEventListener("click", onGo);
+    document.getElementById("go").onclick = () => loadURL(input.value);
     input.addEventListener("keydown", e => {
-      if (e.key === "Enter") onGo();
+      if (e.key === "Enter") loadURL(input.value);
     });
-
-    const params = new URLSearchParams(location.search);
-    const startUrl = params.get("url");
-    if (startUrl) {
-      loadURL(startUrl);
-      input.value = startUrl;
-    }
   </script>
 
 </body>
