@@ -1,78 +1,91 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>Mini Browser</title>
-  <style>
-    body {
-      margin: 0;
-      font-family: sans-serif;
-      background: #f0f0f0;
+<script>
+  const input = document.getElementById("url");
+  const content = document.getElementById("content");
+
+  let currentUrl = null;
+
+  function proxify(url) {
+    return "/api/proxy?url=" + encodeURIComponent(url);
+  }
+
+  function absolutify(base, relative) {
+    try {
+      return new URL(relative, base).toString();
+    } catch {
+      return relative;
     }
-    #topbar {
-      display: flex;
-      padding: 10px;
-      background: #ffffff;
-      border-bottom: 1px solid #ccc;
-    }
-    #url {
-      flex: 1;
-      padding: 8px;
-      font-size: 16px;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-    }
-    #go {
-      margin-left: 10px;
-      padding: 8px 16px;
-      font-size: 16px;
-      border: none;
-      background: #0070f3;
-      color: white;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-    #go:hover {
-      background: #0059c9;
-    }
-    iframe {
-      width: 100%;
-      height: calc(100vh - 60px);
-      border: none;
-      background: white;
-    }
-  </style>
-</head>
-<body>
+  }
 
-  <div id="topbar">
-    <input id="url" placeholder="Enter a URL…" />
-    <button id="go">Go</button>
-  </div>
+  // ⭐ Link + form rewriting (the only rewriting we do)
+  function rewriteLinks(doc) {
+    // Rewrite <a href>
+    doc.querySelectorAll("a[href]").forEach(a => {
+      const href = a.getAttribute("href");
+      if (!href || href.startsWith("javascript:")) return;
 
-  <iframe id="viewer"></iframe>
+      const abs = absolutify(currentUrl, href);
 
-  <script>
-    const input = document.getElementById("url");
-    const viewer = document.getElementById("viewer");
-    const goBtn = document.getElementById("go");
+      a.addEventListener("click", ev => {
+        ev.preventDefault();
+        loadURL(abs);
+      });
 
-    function loadURL() {
-      const target = input.value.trim();
-      if (!target) return;
-
-      const proxied =
-        "/api/proxy?url=" + encodeURIComponent(target);
-
-      viewer.src = proxied;
-    }
-
-    goBtn.onclick = loadURL;
-
-    input.addEventListener("keydown", e => {
-      if (e.key === "Enter") loadURL();
+      a.setAttribute("href", "#");
     });
-  </script>
 
-</body>
-</html>
+    // Rewrite <form action>
+    doc.querySelectorAll("form[action]").forEach(form => {
+      const action = form.getAttribute("action");
+      if (!action) return;
+
+      const abs = absolutify(currentUrl, action);
+      form.setAttribute("action", proxify(abs));
+    });
+  }
+
+  async function loadURL(url) {
+    if (!url) return;
+
+    // Add https:// if missing
+    if (!url.startsWith("http://") && !url.startsWith("https://")) {
+      url = "https://" + url;
+    }
+
+    currentUrl = url;
+    input.value = url;
+    content.innerHTML = "Loading…";
+
+    try {
+      const res = await fetch(proxify(url));
+      const html = await res.text();
+
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, "text/html");
+
+      // ⭐ Apply link rewriting
+      rewriteLinks(doc);
+
+      // Inject HTML body
+      content.innerHTML = "";
+      Array.from(doc.body.childNodes).forEach(node => {
+        content.appendChild(node);
+      });
+
+      document.title = doc.title || "Browser";
+
+    } catch (e) {
+      content.textContent = "Failed to load: " + e.message;
+    }
+  }
+
+  document.getElementById("go").onclick = () => loadURL(input.value);
+
+  input.addEventListener("keydown", e => {
+    if (e.key === "Enter") loadURL(input.value);
+  });
+
+  // Optional: load ?url= parameter
+  const params = new URLSearchParams(location.search);
+  const startUrl = params.get("url");
+  if (startUrl) loadURL(startUrl);
+</script>

@@ -7,18 +7,28 @@ export default async function handler(req, res) {
   }
 
   try {
-    const response = await fetch(target, {
-      headers: { "User-Agent": "GitHub-Proxy" }
+    const upstream = await fetch(target, {
+      headers: {
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "text/html"
+      }
     });
 
-    const text = await response.text();
+    const contentType = upstream.headers.get("content-type") || "";
 
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    // Only allow HTML through the proxy
+    if (!contentType.includes("text/html")) {
+      res.status(403).send("Blocked: Only HTML pages can be proxied.");
+      return;
+    }
 
-    res.status(response.status).send(text);
+    const html = await upstream.text();
+
+    // Return HTML exactly as-is
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.status(200).send(html);
+
   } catch (err) {
-    res.status(500).send("Proxy error: " + err.message + " Try using Social Media Hub if you're attempting to connect to a social media website.");
+    res.status(500).send("Proxy error: " + err.message);
   }
 }
