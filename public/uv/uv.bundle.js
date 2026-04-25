@@ -1,4 +1,3 @@
-// Core UV-style fetch pipeline using Bare + rewrite
 self.Ultraviolet = {
   async fetch(event) {
     const url = new URL(event.request.url);
@@ -8,18 +7,17 @@ self.Ultraviolet = {
       return fetch(event.request);
     }
 
-    // 1) Get encoded part from /api/learner/<encoded>
+    // 1. Extract encoded part
     const encoded = self.__uv$config.stripPrefix(url.pathname);
 
-    // 2) Decode to REAL upstream URL (this is the base we must use)
+    // 2. Decode to REAL upstream URL
     const upstreamUrl = self.__uv$config.decodeUrl(encoded);
 
-    // 3) Build Bare request URL
+    // 3. Build Bare request
     const bareUrl = new URL(self.__uv$config.bare, location.origin);
     bareUrl.searchParams.set("url", upstreamUrl);
     bareUrl.searchParams.set("method", event.request.method);
 
-    // 4) Forward headers/body
     const init = {
       method: event.request.method,
       headers: event.request.headers,
@@ -30,7 +28,7 @@ self.Ultraviolet = {
 
     const upstreamResponse = await fetch(bareUrl.toString(), init);
 
-    // 5) Pass the DECODED upstream URL into the handler
+    // 4. Pass DECODED upstream URL into handler
     return self.UVHandler.handle(upstreamResponse, upstreamUrl);
   }
 };
