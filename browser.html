@@ -91,7 +91,8 @@
   </main>
 
   <script>
-    const PREFIX = "/api/learner/";
+    const UV_PREFIX = "/api/learner/";
+    const BARE_PREFIX = "/api/bare/";
 
     // Register UV Service Worker
     async function registerSW() {
@@ -107,8 +108,8 @@
 
     // UV Client
     const uv = new UVClient({
-      prefix: PREFIX,
-      bare: PREFIX,
+      prefix: UV_PREFIX,
+      bare: BARE_PREFIX,
     });
 
     const iframe = document.getElementById("view");
@@ -130,7 +131,7 @@
       if (!normalized) return;
 
       const encoded = await uv.encodeUrl(normalized);
-      iframe.src = PREFIX + encoded;
+      iframe.src = UV_PREFIX + encoded;
       urlInput.value = normalized;
     }
 
