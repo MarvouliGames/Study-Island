@@ -65,6 +65,24 @@ self.UVRewrite = {
         return m.replace(url, `${self.__uv$config.prefix}${self.__uv$config.encodeUrl(resolved)}`);
       }
     );
+    // Handle target="_blank" so new tabs stay in the proxy
+content = content.replace(
+  /<a([^>]+)href=["']([^"']+)["']([^>]*)target=["']_blank["']([^>]*)>/gi,
+  (m, beforeHref, url, mid, after) => {
+    // Skip already-proxied URLs
+    if (url.startsWith("/api/learner/")) {
+      return `<a${beforeHref}href="${url}"${mid}target="_blank"${after}>`;
+    }
+
+    // Resolve relative/absolute URL
+    const resolved = self.UVRewrite.resolve(baseOrigin, url);
+    const encoded = self.__uv$config.encodeUrl(resolved);
+
+    // Open view.html in new tab
+    return `<a${beforeHref}href="/view.html?url=${encoded}"${mid}target="_blank"${after}>`;
+  }
+);
+
 
     return content;
   },
@@ -79,7 +97,7 @@ self.UVRewrite = {
 
     // location.href = "..."
     content = content.replace(/location\.href\s*=\s*["']([^"']+)["']/g, (m, url) => {
-      const resolved = self.UVRewrite.resolve(baseOrigin, url);
+      const resolved = self.UVRewrite.resolve(baseOriginf, url);
       return `location.href="${self.__uv$config.prefix}${self.__uv$config.encodeUrl(resolved)}"`;
     });
 
@@ -123,3 +141,10 @@ self.UVRewrite = {
     return content;
   }
 };
+
+// window.open("...")
+content = content.replace(/window\.open\(\s*["']([^"']+)["']/g, (m, url) => {
+  const resolved = self.UVRewrite.resolve(baseOrigin, url);
+  const encoded = self.__uv$config.encodeUrl(resolved);
+  return `window.open("/view.html?url=${encoded}"`;
+});
