@@ -10,6 +10,7 @@ self.UVRewrite = {
 
   html(content, upstreamUrl) {
     if (!upstreamUrl) return content;
+
     const base = upstreamUrl;
     const origin = new URL(base).origin;
 
@@ -25,19 +26,20 @@ self.UVRewrite = {
       return `${attr}="${self.__uv$config.prefix}${self.__uv$config.encodeUrl(url)}"`;
     });
 
-    // Root-relative: /path
+    // Root-relative: /path  → origin + /path
     content = content.replace(/(href|src)=["']\/([^"']+)["']/g, (m, attr, path) => {
       const url = origin + "/" + path;
       return `${attr}="${self.__uv$config.prefix}${self.__uv$config.encodeUrl(url)}"`;
     });
 
-    // Relative URLs: path, ./path, ../path
-content = content.replace(/(href|src)=["'](?!https?:\/\/|\/\/|#)([^"']+)["']/g, (m, attr, path) => {
-  const base = upstreamUrl; // the decoded real URL
-  const resolved = new URL(path, base).href;
-  return `${attr}="${self.__uv$config.prefix}${self.__uv$config.encodeUrl(resolved)}"`;
-});
-
+    // Relative: path, ./path, ../path  → resolved against DECODED upstream URL
+    content = content.replace(
+      /(href|src)=["'](?!https?:\/\/|\/\/|#)([^"']+)["']/g,
+      (m, attr, path) => {
+        const url = self.UVRewrite.resolve(base, path);
+        return `${attr}="${self.__uv$config.prefix}${self.__uv$config.encodeUrl(url)}"`;
+      }
+    );
 
     // Forms
     content = content.replace(/action=["']([^"']+)["']/g, (m, url) => {
@@ -46,10 +48,13 @@ content = content.replace(/(href|src)=["'](?!https?:\/\/|\/\/|#)([^"']+)["']/g, 
     });
 
     // Meta refresh
-    content = content.replace(/http-equiv=["']refresh["'][^>]*content=["'][^;]+;\s*url=([^"']+)["']/gi, (m, url) => {
-      const resolved = self.UVRewrite.resolve(base, url);
-      return m.replace(url, `${self.__uv$config.prefix}${self.__uv$config.encodeUrl(resolved)}`);
-    });
+    content = content.replace(
+      /http-equiv=["']refresh["'][^>]*content=["'][^;]+;\s*url=([^"']+)["']/gi,
+      (m, url) => {
+        const resolved = self.UVRewrite.resolve(base, url);
+        return m.replace(url, `${self.__uv$config.prefix}${self.__uv$config.encodeUrl(resolved)}`);
+      }
+    );
 
     return content;
   },
@@ -77,7 +82,8 @@ content = content.replace(/(href|src)=["'](?!https?:\/\/|\/\/|#)([^"']+)["']/g, 
     });
 
     // XHR open("METHOD", "url")
-    content = content.replace(/\.open\(\s*["'](GET|POST|PUT|DELETE|PATCH)["']\s*,\s*["']([^"']+)["']/g,
+    content = content.replace(
+      /\.open\(\s*["'](GET|POST|PUT|DELETE|PATCH)["']\s*,\s*["']([^"']+)["']/g,
       (m, method, url) => {
         const resolved = self.UVRewrite.resolve(base, url);
         return `.open("${method}", "${self.__uv$config.prefix}${self.__uv$config.encodeUrl(resolved)}"`;

@@ -6,7 +6,6 @@ self.UVHandler = {
     const isJs = ct.includes("javascript") || ct.includes("ecmascript");
     const isCss = ct.includes("text/css");
 
-    // Clone so we can read body
     const text = await upstreamResponse.text();
     let body = text;
 
