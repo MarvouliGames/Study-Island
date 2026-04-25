@@ -4,20 +4,37 @@ export const config = {
 
 const PREFIX = "/learner/";
 
-// Base64 URL-safe encode/decode
+// Base64 URL-safe encode/decode with padding handling
 function encode(str) {
-  return btoa(str).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  return btoa(str)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
 }
-function decode(str) {
+
+function fixBase64(str) {
   str = str.replace(/-/g, "+").replace(/_/g, "/");
-  while (str.length % 4) str += "=";
-  return atob(str);
+  const pad = (4 - (str.length % 4)) % 4;
+  return str + "=".repeat(pad);
+}
+
+function decode(str) {
+  return atob(fixBase64(str));
 }
 
 // Turn encoded path into real URL
 function extractUrl(path) {
+  if (!path.startsWith(PREFIX)) {
+    throw new Error("Invalid proxy prefix");
+  }
   const encoded = path.slice(PREFIX.length);
-  return decode(encoded);
+  if (!encoded) throw new Error("Missing encoded URL");
+  const decoded = decode(encoded).trim();
+  try {
+    return new URL(decoded).toString();
+  } catch {
+    throw new Error("Invalid URL string");
+  }
 }
 
 // Rewrite absolute → proxied
@@ -92,19 +109,35 @@ function rewriteJS(text, base) {
 
 export default async function handler(req) {
   try {
-    const url = extractUrl(new URL(req.url).pathname);
+    const urlObj = new URL(req.url);
+    let pathname = urlObj.pathname;
 
-    const upstream = await fetch(url, {
+    // Strip /api prefix so PREFIX matches /learner/
+    if (pathname.startsWith("/api/")) {
+      pathname = pathname.slice(4); // remove "/api"
+    } else if (pathname === "/api") {
+      throw new Error("Missing proxy path");
+    }
+
+    const targetUrl = extractUrl(pathname);
+
+    const upstream = await fetch(targetUrl, {
+      method: req.method,
       headers: {
         "User-Agent": req.headers.get("User-Agent") || "Mozilla/5.0",
-        "Accept": "*/*"
-      }
+        "Accept": req.headers.get("Accept") || "*/*"
+      },
+      body: ["GET", "HEAD"].includes(req.method) ? undefined : req.body
     });
 
     const contentType = upstream.headers.get("content-type") || "";
 
     // Binary passthrough
-    if (!contentType.includes("text") && !contentType.includes("javascript") && !contentType.includes("json")) {
+    if (
+      !contentType.includes("text") &&
+      !contentType.includes("javascript") &&
+      !contentType.includes("json")
+    ) {
       return new Response(await upstream.arrayBuffer(), {
         status: upstream.status,
         headers: { "content-type": contentType }
@@ -112,7 +145,7 @@ export default async function handler(req) {
     }
 
     let text = await upstream.text();
-    const base = url;
+    const base = targetUrl;
 
     if (contentType.includes("html")) text = rewriteHTML(text, base);
     if (contentType.includes("css")) text = rewriteCSS(text, base);
@@ -122,8 +155,9 @@ export default async function handler(req) {
       status: upstream.status,
       headers: { "content-type": contentType }
     });
-
   } catch (err) {
-    return new Response("Proxy error: " + err.message, { status: 500 });
+    return new Response("Proxy error: " + (err?.message || "Unknown error"), {
+      status: 500
+    });
   }
 }
