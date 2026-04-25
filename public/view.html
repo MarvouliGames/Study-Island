@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Study Island</title>
+  <title>Study Island | Learner</title>
 
   <style>
     body {
@@ -20,15 +20,17 @@
       align-items: center;
       padding: 0 10px;
       gap: 10px;
+      box-sizing: border-box;
     }
 
     #url {
       flex: 1;
-      height: 30px;
+      height: 32px;
       border: none;
       border-radius: 4px;
       padding: 0 10px;
       font-size: 14px;
+      outline: none;
     }
 
     #go {
@@ -39,6 +41,7 @@
       background: #4a8;
       color: white;
       cursor: pointer;
+      font-size: 14px;
     }
 
     #frame {
@@ -49,8 +52,8 @@
     }
   </style>
 
-  <!-- Load UV client -->
-  <script src="/uv/client.js"></script>
+  <!-- UV Client -->
+  <script src="/uv/uv.client.js"></script>
 </head>
 
 <body>
@@ -62,40 +65,53 @@
   <iframe id="frame"></iframe>
 
   <script>
-    const urlInput = document.getElementById("url");
-    const frame = document.getElementById("frame");
-    const goBtn = document.getElementById("go");
-
+    // Initialize UV client
     const uv = new UVClient({
       prefix: "/api/learner/",
       bare: "/api/bare/"
     });
 
-    // Load encoded URL from ?url=
+    const urlInput = document.getElementById("url");
+    const frame = document.getElementById("frame");
+    const goBtn = document.getElementById("go");
+
+    // Load ?url=<encoded> on page load
     const params = new URLSearchParams(location.search);
     const encoded = params.get("url");
 
     if (encoded) {
-      frame.src = "/api/learner/" + encoded;
-      try {
-        urlInput.value = atob(encoded);
-      } catch {}
+      const decoded = uv.decodeUrl(encoded);
+      urlInput.value = decoded;
+      frame.src = uv.prefix + encoded;
     }
 
     async function navigate() {
       let raw = urlInput.value.trim();
-      if (!raw.startsWith("http")) raw = "https://" + raw;
+      if (!raw) return;
 
-      const encoded = await uv.encodeUrl(raw);
-      frame.src = "/api/learner/" + encoded;
+      if (!raw.startsWith("http://") && !raw.startsWith("https://")) {
+        raw = "https://" + raw;
+      }
 
+      const encoded = uv.encodeUrl(raw);
+      const proxied = uv.prefix + encoded;
+
+      frame.src = proxied;
+
+      // Update URL bar in browser
       history.replaceState({}, "", "/view.html?url=" + encoded);
     }
 
     goBtn.onclick = navigate;
+
     urlInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") navigate();
     });
+
+    // Register UV service worker
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/uv.sw.js");
+    }
   </script>
 </body>
 </html>

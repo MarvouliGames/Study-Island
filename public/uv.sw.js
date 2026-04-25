@@ -1,12 +1,18 @@
 importScripts(
-  "/uv/bundle.js",
-  "/uv/config.js",
-  "/uv/handler.js",
-  "/uv/rewrite.js"
+  "/uv/uv.config.js",
+  "/uv/uv.rewrite.js",
+  "/uv/uv.handler.js",
+  "/uv/uv.bundle.js"
 );
 
+self.addEventListener("install", (event) => {
+  self.skipWaiting();
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(self.clients.claim());
+});
+
 self.addEventListener("fetch", (event) => {
-  event.respondWith(
-    Ultraviolet.fetch(event)
-  );
+  event.respondWith(self.Ultraviolet.fetch(event));
 });
