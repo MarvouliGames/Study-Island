@@ -31,11 +31,13 @@ self.UVRewrite = {
       return `${attr}="${self.__uv$config.prefix}${self.__uv$config.encodeUrl(url)}"`;
     });
 
-    // Relative: path, ./path, ../path
-    content = content.replace(/(href|src)=["'](?!https?:\/\/|\/\/|#)([^"']+)["']/g, (m, attr, path) => {
-      const url = self.UVRewrite.resolve(base, path);
-      return `${attr}="${self.__uv$config.prefix}${self.__uv$config.encodeUrl(url)}"`;
-    });
+    // Relative URLs: path, ./path, ../path
+content = content.replace(/(href|src)=["'](?!https?:\/\/|\/\/|#)([^"']+)["']/g, (m, attr, path) => {
+  const base = upstreamUrl; // the decoded real URL
+  const resolved = new URL(path, base).href;
+  return `${attr}="${self.__uv$config.prefix}${self.__uv$config.encodeUrl(resolved)}"`;
+});
+
 
     // Forms
     content = content.replace(/action=["']([^"']+)["']/g, (m, url) => {
