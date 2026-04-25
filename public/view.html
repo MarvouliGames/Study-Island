@@ -1,37 +1,101 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Proxy Viewer</title>
+  <meta charset="UTF-8" />
+  <title>Study Island</title>
+
   <style>
-    body { margin: 0; }
+    body {
+      margin: 0;
+      background: #111;
+      color: white;
+      font-family: Arial, sans-serif;
+      overflow: hidden;
+    }
+
     #topbar {
       height: 50px;
       background: #222;
-      color: white;
       display: flex;
       align-items: center;
       padding: 0 10px;
-      font-family: sans-serif;
+      gap: 10px;
     }
+
+    #url {
+      flex: 1;
+      height: 30px;
+      border: none;
+      border-radius: 4px;
+      padding: 0 10px;
+      font-size: 14px;
+    }
+
+    #go {
+      height: 32px;
+      padding: 0 12px;
+      border: none;
+      border-radius: 4px;
+      background: #4a8;
+      color: white;
+      cursor: pointer;
+    }
+
     #frame {
       width: 100vw;
       height: calc(100vh - 50px);
       border: none;
+      background: white;
     }
   </style>
+
+  <!-- Load UV client -->
+  <script src="/uv/client.js"></script>
 </head>
+
 <body>
-  <div id="topbar">Proxy Viewer</div>
+  <div id="topbar">
+    <input id="url" placeholder="Enter a URL…" />
+    <button id="go">Go</button>
+  </div>
+
   <iframe id="frame"></iframe>
 
   <script>
+    const urlInput = document.getElementById("url");
+    const frame = document.getElementById("frame");
+    const goBtn = document.getElementById("go");
+
+    const uv = new UVClient({
+      prefix: "/api/learner/",
+      bare: "/api/bare/"
+    });
+
+    // Load encoded URL from ?url=
     const params = new URLSearchParams(location.search);
     const encoded = params.get("url");
 
     if (encoded) {
-      document.getElementById("frame").src = "/api/learner/" + encoded;
+      frame.src = "/api/learner/" + encoded;
+      try {
+        urlInput.value = atob(encoded);
+      } catch {}
     }
+
+    async function navigate() {
+      let raw = urlInput.value.trim();
+      if (!raw.startsWith("http")) raw = "https://" + raw;
+
+      const encoded = await uv.encodeUrl(raw);
+      frame.src = "/api/learner/" + encoded;
+
+      history.replaceState({}, "", "/view.html?url=" + encoded);
+    }
+
+    goBtn.onclick = navigate;
+    urlInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") navigate();
+    });
   </script>
 </body>
 </html>
