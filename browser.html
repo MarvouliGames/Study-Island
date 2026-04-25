@@ -1,116 +1,239 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Browser</title>
-
+  <meta charset="UTF-8" />
+  <title>Study Island Proxy</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      margin: 0;
-      font-family: sans-serif;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #05060a;
+      color: #f5f5f5;
+      height: 100vh;
       display: flex;
       flex-direction: column;
-      height: 100vh;
     }
-    #topbar {
+    header {
+      padding: 10px;
+      background: #0b0d14;
+      border-bottom: 1px solid #1b1f2b;
       display: flex;
       gap: 8px;
-      padding: 8px;
-      background: #eee;
-      border-bottom: 1px solid #ccc;
+      align-items: center;
     }
-    #url {
+    .logo {
+      font-weight: 600;
+      font-size: 14px;
+      color: #7dd3fc;
+      white-space: nowrap;
+    }
+    .controls {
+      display: flex;
+      gap: 6px;
+      align-items: center;
       flex: 1;
-      padding: 8px;
-      font-size: 14px;
     }
-    #go {
-      padding: 8px 16px;
-      font-size: 14px;
+    button {
+      background: #111827;
+      color: #e5e7eb;
+      border: 1px solid #1f2937;
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-size: 12px;
       cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
     }
-    #content {
+    button:hover {
+      background: #1f2937;
+    }
+    button:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+    input[type="text"] {
       flex: 1;
-      overflow: auto;
-      background: white;
+      padding: 6px 8px;
+      border-radius: 4px;
+      border: 1px solid #1f2937;
+      background: #020617;
+      color: #e5e7eb;
+      font-size: 13px;
+    }
+    input[type="text"]::placeholder {
+      color: #6b7280;
+    }
+    .status {
+      font-size: 11px;
+      color: #9ca3af;
+      min-width: 120px;
+      text-align: right;
+      white-space: nowrap;
+    }
+    main {
+      flex: 1;
+      position: relative;
+      background: #020617;
+    }
+    iframe {
+      border: none;
+      width: 100%;
+      height: 100%;
+      background: #020617;
+    }
+    .overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+    }
+    .spinner {
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      border: 2px solid #1f2937;
+      border-top-color: #38bdf8;
+      animation: spin 0.8s linear infinite;
+    }
+    .hidden {
+      display: none;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
     }
   </style>
 </head>
-
 <body>
+  <header>
+    <div class="logo">Study Island Proxy</div>
+    <div class="controls">
+      <button id="backBtn" title="Back">←</button>
+      <button id="forwardBtn" title="Forward">→</button>
+      <input id="urlInput" type="text" placeholder="Enter a URL (https://example.com)" />
+      <button id="goBtn">Go</button>
+    </div>
+    <div class="status" id="statusText">Idle</div>
+  </header>
 
-  <div id="topbar">
-    <input id="url" placeholder="https://example.com">
-    <button id="go">Go</button>
-  </div>
-
-  <div id="content">Enter a URL and press Go.</div>
+  <main>
+    <iframe id="view" sandbox="allow-same-origin allow-scripts allow-forms allow-popups"></iframe>
+    <div class="overlay hidden" id="loadingOverlay">
+      <div class="spinner"></div>
+    </div>
+  </main>
 
   <script>
-    const PREFIX = "/learner/";
+    const PREFIX = "/api/learner/";
 
-    function encode(str) {
-      return btoa(str).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    const backBtn = document.getElementById("backBtn");
+    const forwardBtn = document.getElementById("forwardBtn");
+    const urlInput = document.getElementById("urlInput");
+    const goBtn = document.getElementById("goBtn");
+    const iframe = document.getElementById("view");
+    const statusText = document.getElementById("statusText");
+    const loadingOverlay = document.getElementById("loadingOverlay");
+
+    const historyStack = [];
+    let historyIndex = -1;
+    let isNavigating = false;
+
+    function setStatus(text) {
+      statusText.textContent = text;
     }
 
-    function normalizeURL(url) {
-      try { return new URL(url).toString(); }
-      catch {
-        try { return new URL("https://" + url).toString(); }
-        catch { return null; }
+    function setLoading(isLoading) {
+      loadingOverlay.classList.toggle("hidden", !isLoading);
+      setStatus(isLoading ? "Loading..." : "Idle");
+    }
+
+    function normalizeUrl(input) {
+      input = input.trim();
+      if (!input) return null;
+      if (!/^https?:\/\//i.test(input)) {
+        input = "https://" + input;
+      }
+      try {
+        return new URL(input).toString();
+      } catch {
+        return null;
       }
     }
 
-    function proxify(url) {
-      return PREFIX + encode(url);
+    function encodeBase64Url(str) {
+      const b64 = btoa(str);
+      return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
     }
 
-    async function loadURL(url) {
-      const normalized = normalizeURL(url);
+    function buildProxyUrl(targetUrl) {
+      const encoded = encodeBase64Url(targetUrl);
+      return PREFIX + encoded;
+    }
+
+    function updateHistoryButtons() {
+      backBtn.disabled = historyIndex <= 0;
+      forwardBtn.disabled = historyIndex < 0 || historyIndex >= historyStack.length - 1;
+    }
+
+    function navigateTo(targetUrl, push = true) {
+      const normalized = normalizeUrl(targetUrl);
       if (!normalized) {
-        content.textContent = "Invalid URL";
+        setStatus("Invalid URL");
         return;
       }
 
-      url = normalized;
-      input.value = url;
-      content.innerHTML = "Loading…";
+      const proxied = buildProxyUrl(normalized);
+      isNavigating = true;
+      setLoading(true);
+      iframe.src = proxied;
+      urlInput.value = normalized;
 
-      try {
-        const res = await fetch(proxify(url));
-        const html = await res.text();
-
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, "text/html");
-
-        // Rewrite links only (proxy handles everything else)
-        doc.querySelectorAll("a[href]").forEach(a => {
-          const href = a.getAttribute("href");
-          if (!href || href.startsWith("javascript:")) return;
-          try {
-            const abs = new URL(href, url).toString();
-            a.setAttribute("href", proxify(abs));
-          } catch {}
-        });
-
-        content.innerHTML = "";
-        Array.from(doc.body.childNodes).forEach(n => content.appendChild(n));
-
-        document.title = doc.title || "Browser";
-
-      } catch (e) {
-        content.textContent = "Failed to load: " + e.message;
+      if (push) {
+        historyStack.splice(historyIndex + 1);
+        historyStack.push(normalized);
+        historyIndex = historyStack.length - 1;
       }
+
+      updateHistoryButtons();
     }
 
-    const input = document.getElementById("url");
-    const content = document.getElementById("content");
-
-    document.getElementById("go").onclick = () => loadURL(input.value);
-    input.addEventListener("keydown", e => {
-      if (e.key === "Enter") loadURL(input.value);
+    iframe.addEventListener("load", () => {
+      setLoading(false);
+      isNavigating = false;
     });
-  </script>
 
+    goBtn.addEventListener("click", () => {
+      navigateTo(urlInput.value, true);
+    });
+
+    urlInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        navigateTo(urlInput.value, true);
+      }
+    });
+
+    backBtn.addEventListener("click", () => {
+      if (historyIndex > 0) {
+        historyIndex--;
+        const url = historyStack[historyIndex];
+        navigateTo(url, false);
+      }
+    });
+
+    forwardBtn.addEventListener("click", () => {
+      if (historyIndex < historyStack.length - 1) {
+        historyIndex++;
+        const url = historyStack[historyIndex];
+        navigateTo(url, false);
+      }
+    });
+
+    // Optional: load a default page
+    // navigateTo("https://example.com", true);
+  </script>
 </body>
 </html>
