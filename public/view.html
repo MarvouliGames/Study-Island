@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Proxy Viewer</title>
+  <style>
+    body { margin: 0; }
+    #topbar {
+      height: 50px;
+      background: #222;
+      color: white;
+      display: flex;
+      align-items: center;
+      padding: 0 10px;
+      font-family: sans-serif;
+    }
+    #frame {
+      width: 100vw;
+      height: calc(100vh - 50px);
+      border: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="topbar">Proxy Viewer</div>
+  <iframe id="frame"></iframe>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const encoded = params.get("url");
+
+    if (encoded) {
+      document.getElementById("frame").src = "/api/learner/" + encoded;
+    }
+  </script>
+</body>
+</html>
