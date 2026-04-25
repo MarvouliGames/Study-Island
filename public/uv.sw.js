@@ -1,6 +1,6 @@
 importScripts(
   "/uv/uv.config.js",
-  "/uv/uv.rewrite.js",
+  "/uv/uv.rewrite.v2.js",
   "/uv/uv.handler.js",
   "/uv/uv.bundle.js"
 );

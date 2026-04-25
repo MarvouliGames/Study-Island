@@ -11,8 +11,14 @@ self.UVRewrite = {
     if (!upstreamUrl) return content;
 
     const u = new URL(upstreamUrl);
-    const origin = u.origin;          // https://google.com
-    const baseOrigin = origin + "/";  // always ignore any path
+    const origin = u.origin;
+    const baseOrigin = origin + "/";
+
+    // 0) DO NOT re-rewrite already-proxied links
+    content = content.replace(
+      /(href|src)=["'](\/api\/learner\/[^"']+)["']/g,
+      (m, attr, val) => `${attr}="${val}"`
+    );
 
     // Absolute URLs: http(s)://
     content = content.replace(/(href|src)=["']https?:\/\/([^"']+)["']/g, (m, attr, rest) => {
@@ -26,16 +32,18 @@ self.UVRewrite = {
       return `${attr}="${self.__uv$config.prefix}${self.__uv$config.encodeUrl(url)}"`;
     });
 
-    // Root-relative: /path  → origin + /path
+    // Root-relative: /path
     content = content.replace(/(href|src)=["']\/([^"']+)["']/g, (m, attr, path) => {
       const url = origin + "/" + path;
       return `${attr}="${self.__uv$config.prefix}${self.__uv$config.encodeUrl(url)}"`;
     });
 
-    // Relative: path, ./path, ../path  → resolve against ORIGIN, not full upstreamUrl
+    // Relative: path, ./path, ../path
     content = content.replace(
       /(href|src)=["'](?!https?:\/\/|\/\/|#)([^"']+)["']/g,
       (m, attr, path) => {
+        // If it already starts with /api/learner/, leave it alone
+        if (path.startsWith("/api/learner/")) return `${attr}="${path}"`;
         const url = self.UVRewrite.resolve(baseOrigin, path);
         return `${attr}="${self.__uv$config.prefix}${self.__uv$config.encodeUrl(url)}"`;
       }
@@ -43,6 +51,7 @@ self.UVRewrite = {
 
     // Forms
     content = content.replace(/action=["']([^"']+)["']/g, (m, url) => {
+      if (url.startsWith("/api/learner/")) return `action="${url}"`;
       const resolved = self.UVRewrite.resolve(baseOrigin, url);
       return `action="${self.__uv$config.prefix}${self.__uv$config.encodeUrl(resolved)}"`;
     });
@@ -51,6 +60,7 @@ self.UVRewrite = {
     content = content.replace(
       /http-equiv=["']refresh["'][^>]*content=["'][^;]+;\s*url=([^"']+)["']/gi,
       (m, url) => {
+        if (url.startsWith("/api/learner/")) return m;
         const resolved = self.UVRewrite.resolve(baseOrigin, url);
         return m.replace(url, `${self.__uv$config.prefix}${self.__uv$config.encodeUrl(resolved)}`);
       }
@@ -58,6 +68,8 @@ self.UVRewrite = {
 
     return content;
   },
+
+  // keep your js/css parts as-is, or with the same kind of guard if needed
 
   js(content, upstreamUrl) {
     if (!upstreamUrl) return content;
