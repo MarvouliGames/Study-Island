@@ -24,13 +24,29 @@ scripts.forEach(old => {
     this.bootstrap();
   },
 
-  bootstrap() {
-    // Re-run scripts that were injected as text
-    const scripts = document.querySelectorAll("script[data-uv-script]");
-    scripts.forEach(old => {
-      const s = document.createElement("script");
-      s.textContent = old.textContent;
-      old.replaceWith(s);
-    });
-  }
-};
+bootstrap(container) {
+  // Re-run inline scripts
+  const scripts = container.querySelectorAll("script[data-uv-script]");
+  scripts.forEach(old => {
+    const s = document.createElement("script");
+    s.textContent = old.textContent;
+    old.replaceWith(s);
+  });
+
+  // Intercept link clicks
+  container.addEventListener("click", (e) => {
+    const a = e.target.closest("a");
+    if (!a) return;
+
+    const href = a.getAttribute("href");
+    if (!href || href.startsWith("javascript:") || href.startsWith("#")) return;
+
+    e.preventDefault();
+
+    const base = document.querySelector("base")?.href || location.href;
+    const resolved = new URL(href, base).href;
+
+    const encoded = btoa(resolved);
+    location.href = `/view.html?url=${encoded}`;
+  });
+}
