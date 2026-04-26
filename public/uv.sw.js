@@ -1,11 +1,14 @@
 const v = Date.now(); // auto-bump every load
 
 importScripts(
-  `/uv/uv.config.v1.js?v=${v}`,
-  `/uv/uv.rewrite.v1.js?v=${v}`,
-  `/uv/uv.handler.v1.js?v=${v}`,
-  `/uv/uv.bundle.v1.js?v=${v}`
+  `/uv/uv.config.js?v=${v}`,
+  `/uv/uv.rewrite.js?v=${v}`,
+  `/uv/uv.handler.js?v=${v}`,
+  `/uv/uv.bundle.js?v=${v}`,
+  `/uv/uv.dom.rewrite.js?v=${v}`,
+  `/uv/uv.dom.bundle.js?v=${v}`
 );
+
 
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));

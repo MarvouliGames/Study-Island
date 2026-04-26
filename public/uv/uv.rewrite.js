@@ -121,6 +121,42 @@ content = content.replace(
         return `.open("${method}", "${self.__uv$config.prefix}${self.__uv$config.encodeUrl(resolved)}"`;
       }
     );
+        // Intercept history.pushState and replaceState
+content = content.replace(
+  /history\.(pushState|replaceState)\(([^)]*)\)/g,
+  (m, method, args) => {
+    // Extract the URL argument (3rd argument)
+    const parts = args.split(",");
+    if (parts.length < 3) return m;
+
+    let url = parts[2].trim();
+    url = url.replace(/^["']|["']$/g, ""); // remove quotes
+
+    // Resolve relative/absolute URL
+    const resolved = self.UVRewrite.resolve(baseOrigin, url);
+    const encoded = self.__uv$config.encodeUrl(resolved);
+
+    // Rewrite to proxied URL
+    const newUrl = `"/view.html?url=${encoded}"`;
+
+    // Rebuild the call
+    parts[2] = newUrl;
+    return `history.${method}(${parts.join(",")})`;
+  }
+);
+// Intercept onpopstate navigation
+content = content.replace(
+  /onpopstate\s*=\s*function\s*\(([^)]*)\)\s*{/g,
+  (m, args) => {
+    return `onpopstate = function(${args}) {
+      try {
+        const url = location.href;
+        const encoded = self.__uv$config.encodeUrl(url);
+        location.href = "/view.html?url=" + encoded;
+      } catch(e) {}
+    {`;
+  }
+);
 
     return content;
   },

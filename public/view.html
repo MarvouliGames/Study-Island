@@ -2,116 +2,134 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Study Island | Learner</title>
 
   <style>
     body {
       margin: 0;
       background: #111;
-      color: white;
-      font-family: Arial, sans-serif;
+      color: #eee;
+      font-family: system-ui, sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
       overflow: hidden;
     }
 
+    /* Topbar */
     #topbar {
-      height: 50px;
-      background: #222;
+      background: #1b1b1b;
+      padding: 10px;
       display: flex;
+      gap: 8px;
       align-items: center;
-      padding: 0 10px;
-      gap: 10px;
-      box-sizing: border-box;
+      border-bottom: 1px solid #333;
     }
 
-    #url {
-      flex: 1;
-      height: 32px;
+    #topbar button {
+      background: #2a2a2a;
       border: none;
-      border-radius: 4px;
-      padding: 0 10px;
-      font-size: 14px;
-      outline: none;
-    }
-
-    #go {
-      height: 32px;
-      padding: 0 12px;
-      border: none;
-      border-radius: 4px;
-      background: #4a8;
-      color: white;
+      color: #ccc;
+      padding: 6px 10px;
+      border-radius: 6px;
       cursor: pointer;
       font-size: 14px;
     }
 
-    #frame {
-      width: 100vw;
-      height: calc(100vh - 50px);
+    #topbar button:hover {
+      background: #3a3a3a;
+    }
+
+    #urlbar {
+      flex: 1;
+      padding: 8px 12px;
+      border-radius: 6px;
       border: none;
-      background: white;
+      background: #2a2a2a;
+      color: #eee;
+      font-size: 15px;
+    }
+
+    #content {
+      flex: 1;
+      overflow: auto;
+      background: #fff;
+      color: #000;
     }
   </style>
-
-  <!-- UV Client -->
-  <script src="/uv/uv.client.js"></script>
 </head>
 
 <body>
+
+  <!-- Top Navigation Bar -->
   <div id="topbar">
-    <input id="url" placeholder="Enter a URL…" />
-    <button id="go">Go</button>
+    <button id="backBtn">⟵</button>
+    <button id="forwardBtn">⟶</button>
+    <button id="reloadBtn">⟳</button>
+    <input id="urlbar" placeholder="Enter a URL…" />
   </div>
 
-  <iframe id="frame"></iframe>
+  <!-- DOM-injected content -->
+  <div id="content"></div>
+
+  <!-- DOM Proxy Loader -->
+  <script src="/uv/uv.dom.client.js?v=auto"></script>
 
   <script>
-    // Initialize UV client
-    const uv = new UVClient({
-      prefix: "/api/learner/",
-      bare: "/api/bare/"
+    const urlbar = document.getElementById("urlbar");
+    const content = document.getElementById("content");
+
+    // Extract encoded URL from ?url=
+    const encoded = new URL(location.href).searchParams.get("url");
+
+    // Load initial page
+    UVDOM.load(encoded);
+
+    // Update URL bar when DOM sets document.title
+    const titleObserver = new MutationObserver(() => {
+      document.title = document.querySelector("title")?.innerText || "Proxy";
     });
+    titleObserver.observe(document.head, { childList: true, subtree: true });
 
-    const urlInput = document.getElementById("url");
-    const frame = document.getElementById("frame");
-    const goBtn = document.getElementById("go");
+    // Navigation buttons
+    backBtn.onclick = () => history.back();
+    forwardBtn.onclick = () => history.forward();
+    reloadBtn.onclick = () => location.reload();
 
-    // Load ?url=<encoded> on page load
-    const params = new URLSearchParams(location.search);
-    const encoded = params.get("url");
-
-    if (encoded) {
-      const decoded = uv.decodeUrl(encoded);
-      urlInput.value = decoded;
-      frame.src = uv.prefix + encoded;
-    }
-
-    async function navigate() {
-      let raw = urlInput.value.trim();
-      if (!raw) return;
-
-      if (!raw.startsWith("http://") && !raw.startsWith("https://")) {
-        raw = "https://" + raw;
+    // URL bar navigation
+    urlbar.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        let raw = urlbar.value.trim();
+        if (!raw.startsWith("http")) raw = "https://" + raw;
+        const encoded = btoa(raw);
+        location.href = `/view.html?url=${encoded}`;
       }
-
-      const encoded = uv.encodeUrl(raw);
-      const proxied = uv.prefix + encoded;
-
-      frame.src = proxied;
-
-      // Update URL bar in browser
-      history.replaceState({}, "", "/view.html?url=" + encoded);
-    }
-
-    goBtn.onclick = navigate;
-
-    urlInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") navigate();
     });
 
-    // Register UV service worker
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/uv.sw.js");
-    }
+    // Sync URL bar with current page
+    const syncUrl = () => {
+      try {
+        const current = document.querySelector("base")?.href || "";
+        if (current) urlbar.value = current;
+      } catch {}
+    };
+    setInterval(syncUrl, 500);
+
+    // Favicon rewriting
+    const faviconObserver = new MutationObserver(() => {
+      const link = document.querySelector("link[rel='icon']");
+      if (link) {
+        const href = link.getAttribute("href");
+        if (href && !href.startsWith("/api/learner/")) {
+          const resolved = new URL(href, location.href).href;
+          const encoded = btoa(resolved);
+          link.href = `/api/learner/${encoded}`;
+        }
+      }
+    });
+    faviconObserver.observe(document.head, { childList: true, subtree: true });
   </script>
+
 </body>
 </html>
