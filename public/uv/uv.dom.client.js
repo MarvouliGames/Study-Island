@@ -20,9 +20,9 @@ scripts.forEach(old => {
   old.replaceWith(s);
 });
 
-    // Boot the DOM runtime
-    this.bootstrap(container);
-  },
+  // Boot the DOM runtime
+  this.bootstrap(container);
+},
 
 bootstrap(container) {
   // Intercept link clicks
