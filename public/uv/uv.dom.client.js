@@ -9,10 +9,16 @@ window.UVDOM = {
     // Rewrite HTML (server-side rewrite already happened)
     const rewritten = html;
 
-    // Replace document with rewritten HTML
-    document.open();
-    document.write(rewritten);
-    document.close();
+    const container = document.getElementById("content");
+container.innerHTML = rewritten;
+
+// Re-run inline scripts
+const scripts = container.querySelectorAll("script[data-uv-script]");
+scripts.forEach(old => {
+  const s = document.createElement("script");
+  s.textContent = old.textContent;
+  old.replaceWith(s);
+});
 
     // Boot the DOM runtime
     this.bootstrap();
