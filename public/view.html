@@ -75,16 +75,14 @@
 
   <!-- DOM Proxy Loader -->
   <script src="/uv/uv.dom.client.js?v=auto"></script>
+<script>
+  const encoded = new URL(location.href).searchParams.get("url");
 
-  <script>
-    const urlbar = document.getElementById("urlbar");
-    const content = document.getElementById("content");
-
-    // Extract encoded URL from ?url=
-    const encoded = new URL(location.href).searchParams.get("url");
-
-    // Load initial page
+  // Only load if a URL was provided
+  if (encoded) {
     UVDOM.load(encoded);
+  }
+
 
     // Update URL bar when DOM sets document.title
     const titleObserver = new MutationObserver(() => {
