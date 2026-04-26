@@ -42,3 +42,4 @@ bootstrap(container) {
     location.href = `/view.html?url=${encoded}`;
   });
 }
+};
