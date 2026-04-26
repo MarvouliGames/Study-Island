@@ -21,18 +21,10 @@ scripts.forEach(old => {
 });
 
     // Boot the DOM runtime
-    this.bootstrap();
+    this.bootstrap(container);
   },
 
 bootstrap(container) {
-  // Re-run inline scripts
-  const scripts = container.querySelectorAll("script[data-uv-script]");
-  scripts.forEach(old => {
-    const s = document.createElement("script");
-    s.textContent = old.textContent;
-    old.replaceWith(s);
-  });
-
   // Intercept link clicks
   container.addEventListener("click", (e) => {
     const a = e.target.closest("a");
